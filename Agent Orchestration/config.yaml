@@ -9,7 +9,7 @@ robot:
   wake_words:
     - "hey vedha"
     - "vedha"
-    - "வேதா"  # Tamil transliteration support
+    - "வேதா"
 
 # ─── Network addresses ───────────────────────────────────────
 network:
@@ -17,64 +17,87 @@ network:
     host: "192.168.1.10"
     perception_port: 5550      # ZMQ PUB  → events to Orin2
     audio_stream_port: 5551    # ZMQ PUSH → raw PCM to Orin2
+    snapshot_port: 5553        # HTTP GET /snapshot
   orin2:
     host: "192.168.1.11"
-    vlm_api_port: 8000         # FastAPI VLM server
-    tool_result_port: 5552     # ZMQ PULL → tool results back
+    vlm_api_port: 8000
+    tool_result_port: 5552
   i7:
     host: "192.168.1.12"
-    ros_bridge_port: 9090      # rosbridge_websocket
-    tool_executor_port: 8001   # FastAPI tool executor
+    ros_bridge_port: 9090
+    tool_executor_port: 8001
 
 # ─── Ollama / VLM (Orin2) ────────────────────────────────────
 vlm:
   ollama_host: "http://localhost:11434"
-  # gemma3:4b – lean, fast on Orin2, no native vision/tool-call
-  # Tool calling handled via JSON-in-prompt parsing
   model: "gemma3:4b"
   max_tokens: 512
   temperature: 0.7
-  context_window: 8192          # gemma3 has 128k context; keep conservative
-  # How many conversation turns to keep in memory
+  context_window: 8192
   history_turns: 6
 
 # ─── Perception (Orin1) ──────────────────────────────────────
 perception:
   camera:
-    device: 0                    # /dev/video0 or CSI index
+    # Set device: 0 for USB/CSI via OpenCV.
+    # Set ros_topic: "/camera/color/image_raw" to use ROS subscriber instead.
+    # If ros_topic is non-empty, the ROS subscriber takes priority.
+    device: 0
+    ros_topic: "/camera/color/image_raw"   # set to "" to use OpenCV directly
     width: 640
     height: 480
     fps: 30
-    # Frame sent to VLM on each interaction (not streaming)
-    capture_on_trigger: true
 
   wake_word:
-    # openWakeWord model path (see scripts/download_models.sh)
     model_path: "models/hey_vedha.onnx"
-    # Fallback to porcupine if openWakeWord unavailable
-    engine: "openwakeword"       # openwakeword | porcupine
+    engine: "openwakeword"
     porcupine_key: "YOUR_PORCUPINE_KEY"
     threshold: 0.7
     chunk_size: 1280             # samples @ 16kHz
 
-  person_detection:
-    model: "yolov8n.pt"          # nano model fits Orin1 RAM
-    confidence: 0.55
-    # Only trigger welcome if no person was seen for this many seconds
-    cooldown_seconds: 30
-    # Person must be detected for N consecutive frames before trigger
+  face_recognition:
+    # Scale factor for detection (lower = faster, less accurate)
+    # 0.25 = process at 25% resolution (matches original code)
+    scale: 0.25
+    # Face match tolerance (lower = stricter). 0.6 is face_recognition default.
+    tolerance: 0.55
+    # Seconds between repeated triggers for the SAME face
+    cooldown_per_face: 30
+    # Seconds between repeated triggers for unknown persons
+    cooldown_unknown: 20
+    # Face must appear in N consecutive frames before triggering
     min_consecutive_frames: 3
 
-# ─── STT – Sarvam Saaras (Orin1 → cloud) ────────────────────
+    # ── Registered faces ─────────────────────────────────────
+    # Each entry: name + path to reference image on Orin1 filesystem
+    # Session ID for known faces = "face_<name_lower>" (stable across visits)
+    # The VLM receives the name in its context for personalized greetings.
+    known_faces:
+      - name: "Shri"
+        image_path: "/home/nvidia/shri.jpg"
+        # Optional: custom title used in VLM context
+        title: ""
+      - name: "Chairman"
+        image_path: "/home/nvidia/chairman.jpg"
+        title: "Chairman"
+      - name: "ViceChairman"
+        image_path: "/home/nvidia/vicechairman.jpg"
+        title: "Vice Chairman"
+      - name: "Principal"
+        image_path: "/home/nvidia/principal.jpg"
+        title: "Principal"
+      - name: "Vijaysir"
+        image_path: "/home/nvidia/vijaysir.jpg"
+        title: "Sir"
+
+# ─── STT – Sarvam Saaras ─────────────────────────────────────
 stt:
   provider: "sarvam"
   sarvam_api_key: "YOUR_SARVAM_API_KEY"
   sarvam_endpoint: "https://api.sarvam.ai/speech-to-text"
-  language_code: "en-IN"        # or ta-IN for Tamil
+  language_code: "en-IN"
   model: "saaras:v2"
-  # Max recording duration after wake word
   max_listen_seconds: 10
-  # Silence threshold to stop recording (seconds)
   silence_timeout: 1.5
   sample_rate: 16000
   channels: 1
@@ -82,16 +105,16 @@ stt:
 # ─── TTS / Speaker (i7) ──────────────────────────────────────
 tts:
   engine: "sarvam_bulbul"
-  sarvam_api_key: "YOUR_SARVAM_API_KEY"   # same key as STT
+  sarvam_api_key: "YOUR_SARVAM_API_KEY"
   sarvam_tts_endpoint: "https://api.sarvam.ai/text-to-speech"
   model: "bulbul:v3"
-  speaker: "meera"             # available: meera | pavithra | maitreyi | arvind | amol
-  language_code: "en-IN"       # en-IN | ta-IN | hi-IN etc.
-  pitch: 0                     # -10 to 10
-  pace: 1.1                    # 0.5 to 2.0
-  loudness: 1.5                # 0.5 to 3.0
-  enable_preprocessing: true   # normalize numbers, abbreviations
-  output_device: "default"     # ALSA device on i7
+  speaker: "meera"
+  language_code: "en-IN"
+  pitch: 0
+  pace: 1.1
+  loudness: 1.5
+  enable_preprocessing: true
+  output_device: "default"
 
 # ─── ROS (i7) ────────────────────────────────────────────────
 ros:
@@ -99,9 +122,8 @@ ros:
   cmd_vel_topic: "/cmd_vel"
   gesture_action: "/vedha/gesture"
   head_control_topic: "/vedha/head/cmd"
-  # Speeds
-  linear_speed: 0.3             # m/s
-  angular_speed: 0.5            # rad/s
+  linear_speed: 0.3
+  angular_speed: 0.5
 
 # ─── Tools available to VLM ──────────────────────────────────
 tools:

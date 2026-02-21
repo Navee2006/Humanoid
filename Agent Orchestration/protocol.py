@@ -17,28 +17,38 @@ import msgpack
 #  Event types published by Orin1
 # ──────────────────────────────────────────────
 class EventType(str, Enum):
-    PERSON_DETECTED   = "person_detected"
-    PERSON_LOST       = "person_lost"
-    WAKE_WORD         = "wake_word"
-    STT_RESULT        = "stt_result"
-    CAMERA_FRAME      = "camera_frame"   # base64 JPEG
+    # Camera detected a registered face
+    KNOWN_FACE_DETECTED   = "known_face_detected"
+    # Camera detected a person but face is not in the registry
+    UNKNOWN_PERSON_DETECTED = "unknown_person_detected"
+    # A previously visible person / face is no longer in frame
+    PERSON_LOST           = "person_lost"
+    # Wake word ("Hey Vedha") detected by openWakeWord
+    WAKE_WORD             = "wake_word"
+    # Sarvam Saaras STT result ready
+    STT_RESULT            = "stt_result"
+    # On-demand camera frame (used internally)
+    CAMERA_FRAME          = "camera_frame"
+
+    # ── backward-compat alias (kept so vlm_server imports don't break) ──
+    PERSON_DETECTED       = "unknown_person_detected"
 
 
 # ──────────────────────────────────────────────
-#  Tool call / result types
+#  Tool names
 # ──────────────────────────────────────────────
 class ToolName(str, Enum):
-    WELCOME_PERSON  = "welcome_person"
-    SPEAK           = "speak"
-    CAPTURE_IMAGE   = "capture_image"
-    MOVE_FORWARD    = "move_forward"
-    MOVE_BACKWARD   = "move_backward"
-    TURN_LEFT       = "turn_left"
-    TURN_RIGHT      = "turn_right"
-    WAVE_HAND       = "wave_hand"
-    NOD_HEAD        = "nod_head"
-    SHAKE_HEAD      = "shake_head"
-    LOOK_AT_PERSON  = "look_at_person"
+    WELCOME_PERSON   = "welcome_person"
+    SPEAK            = "speak"
+    CAPTURE_IMAGE    = "capture_image"
+    MOVE_FORWARD     = "move_forward"
+    MOVE_BACKWARD    = "move_backward"
+    TURN_LEFT        = "turn_left"
+    TURN_RIGHT       = "turn_right"
+    WAVE_HAND        = "wave_hand"
+    NOD_HEAD         = "nod_head"
+    SHAKE_HEAD       = "shake_head"
+    LOOK_AT_PERSON   = "look_at_person"
 
 
 # ──────────────────────────────────────────────
@@ -47,9 +57,11 @@ class ToolName(str, Enum):
 @dataclass
 class PerceptionEvent:
     event_type: str
-    timestamp: float = field(default_factory=time.time)
-    session_id: str  = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    payload: dict    = field(default_factory=dict)
+    timestamp: float  = field(default_factory=time.time)
+    session_id: str   = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    payload: dict     = field(default_factory=dict)
+    # Convenience: human-readable label for logging / VLM context
+    label: str        = ""
 
     def pack(self) -> bytes:
         return msgpack.packb(asdict(self), use_bin_type=True)
