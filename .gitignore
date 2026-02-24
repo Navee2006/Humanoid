@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Point-E models (too large for GitHub)
+point-e/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+long_term_memory/
+projects/
+temp/
+*.stl
+*.ply
+*.obj
+
+# Git
+.git/index.lock
